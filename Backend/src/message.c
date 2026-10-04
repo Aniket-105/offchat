@@ -37,10 +37,49 @@ struct Message create_message(const char *message,struct User sender,struct User
 };
 
 int validate_message(struct Message msg){
-    msg.message_id != 0;
-    msg.length = strlen(msg.message);
-    msg.message != 0;
-};
+    if (
+      msg.message_id == 0 ||
+      msg.length != strlen(msg.message) ||
+      msg.message[0] == '\0' ||
+      msg.timestamp == 0 ||
+      msg.receiver.ip[0] == '\0'||
+      msg.receiver.port <= 0 ||
+      msg.receiver.port > 65535 ||
+      msg.receiver.name[0] == '\0'||
+      msg.sender.ip[0] == '\0' ||
+      msg.sender.port <= 0 ||
+      msg.sender.port > 65535 ||
+      msg.sender.name[0] == '\0'
+      ) {
+          return 0;
+       }
+  return 1;
+}
+
+int send_message(int sockfd, struct Message *msg){
+     if (msg == NULL) {
+        return -1;
+      }
+     if (validate_message(*msg) == 0) {
+       return -1;
+     }
+     if (sockfd < 0) {
+       return -1;
+     }
+   size_t total = sizeof(*msg);
+   size_t sent = 0;
+     while (sent < total) {
+         ssize_t n = send(sockfd ,(char *)msg + sent, total - sent, 0);
+         if (n <= 0){
+          return -1;
+      }
+        sent = sent + n;
+     }
+     msg->status = STATUS_SENT;
+    return 0;
+}
+
+int receive_message
 
 int main() {
-  
+ 
