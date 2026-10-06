@@ -35,12 +35,12 @@ struct Message create_message(const char *message,struct User sender,struct User
     msg.receiver = receiver;
     msg.status = STATUS_QUEUED;
     return msg;
-};
+}
 
 int validate_message(struct Message msg){
     if (
       msg.message_id == 0 ||
-      len msg.length != strlen(msg.message) ||
+      msg.length != strlen(msg.message) ||
       msg.message[0] == '\0' ||
       msg.timestamp == 0 ||
       msg.receiver.ip[0] == '\0'||
