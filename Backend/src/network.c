@@ -61,7 +61,58 @@ int accept_client(int server_fd) {
        return client_fd;
 }
 
-int connect_to_server(const char *ip, int port){
+int connect_to_server(const char *ip, int port)
+{
+    if (ip == NULL || port <= 0 || port > 65535) {
+        errno = EINVAL;
+        perror("Invalid IP or port");
+        return -1;
+    }
 
-          
+    int sockfd;
+    struct sockaddr_in server_addr;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        return -1;
+    }
+
+    memset(&server_addr, 0, sizeof(server_addr));
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons((unsigned short)port);
+
+    int result = inet_pton(AF_INET, ip, &server_addr.sin_addr);
+
+    if (result != 1) {
+        if (result == 0) {
+            fprintf(stderr, "Invalid IPv4 address: %s\n", ip);
+        } else {
+            perror("inet_pton failed");
+        }
+
+        close(sockfd);
+        return -1;
+    }
+
+    if (connect(sockfd, (struct sockaddr *)&server_addr,
+                sizeof(server_addr)) < 0) {
+        perror("Connection failed");
+        close(sockfd);
+        return -1;
+    }
+
+    return sockfd;
+}
+
+int close_socket(int sockfd)
+{
+    if (sockfd < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return close(sockfd);
 }
