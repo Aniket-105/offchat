@@ -167,6 +167,9 @@ class App(tk.Tk):
         self.tags = itertools.count(1)
         self.listbox_cache = None
         self.current = None
+        self._bubbles = []
+        self._chat_w = 0
+        self._resize_job = None
 
         style = ttk.Style(self)
         if "clam" in style.theme_names():
@@ -245,6 +248,7 @@ class App(tk.Tk):
         self.chat.pack(side="left", fill="both", expand=True)
         csb.pack(side="right", fill="y")
         self._configure_tags()
+        self.chat.bind("<Configure>", self._on_chat_resize)
 
         send_row = ttk.Frame(right)
         send_row.pack(fill="x")
@@ -265,10 +269,8 @@ class App(tk.Tk):
                         font=("TkDefaultFont", 8), rmargin=8, spacing1=8)
         c.tag_configure("meta_them", justify="left", foreground="#6b7280",
                         font=("TkDefaultFont", 8), lmargin1=8, spacing1=8)
-        c.tag_configure("me", justify="right", background="#d9f2d0",
-                        lmargin1=120, lmargin2=120, rmargin=8, spacing3=2)
-        c.tag_configure("them", justify="left", background="#e6e8ec",
-                        lmargin1=8, lmargin2=8, rmargin=120, spacing3=2)
+        c.tag_configure("line_me", justify="right", rmargin=8, spacing3=2)
+        c.tag_configure("line_them", justify="left", lmargin1=8, lmargin2=8, spacing3=2)
         c.tag_configure("failed", foreground="#c62828")
         c.tag_configure("delivered", foreground="#2e7d32")
         c.tag_configure("empty", foreground="#999", justify="center", spacing1=60)
@@ -479,10 +481,43 @@ class App(tk.Tk):
             self._update_input_state()
             self._render()
 
+    def _on_chat_resize(self, event):
+        if abs(event.width - self._chat_w) < 40:
+            return
+        self._chat_w = event.width
+        if self._resize_job:
+            self.after_cancel(self._resize_job)
+        self._resize_job = self.after(150, self._rerender)
+
+    def _rerender(self):
+        self._resize_job = None
+        self._render()
+
+    def _bubble(self, text, side):
+        c = self.chat
+        mine = side == "me"
+        lbl = tk.Label(
+            c, text=text, bg="#d9f2d0" if mine else "#e6e8ec", fg="#000",
+            justify="left", anchor="w", padx=10, pady=5, borderwidth=0,
+            wraplength=max(160, int(c.winfo_width() * 0.6)),
+            font=("TkDefaultFont", 10))
+        lbl.bind("<MouseWheel>",
+                 lambda e: c.yview_scroll(-1 if e.delta > 0 else 1, "units"))
+        lbl.bind("<Button-4>", lambda e: c.yview_scroll(-1, "units"))
+        lbl.bind("<Button-5>", lambda e: c.yview_scroll(1, "units"))
+        self._bubbles.append(lbl)
+        start = c.index("end-1c")
+        c.window_create("end", window=lbl)
+        c.insert("end", "\n")
+        c.tag_add("line_me" if mine else "line_them", start, "end-1c")
+
     def _render(self):
         c = self.chat
         c.config(state="normal")
         c.delete("1.0", "end")
+        for lbl in self._bubbles:
+            lbl.destroy()
+        self._bubbles = []
         peer = self.peers.get(self.current)
         if peer is None or not peer.history:
             c.insert("end", "No messages yet.", "empty")
@@ -496,10 +531,10 @@ class App(tk.Tk):
                     c.insert("end", TICKS[st], ("meta_me", tick_tag) if tick_tag
                              else ("meta_me",))
                     c.insert("end", "\n", "meta_me")
-                    c.insert("end", f" {m['text']} \n", "me")
+                    self._bubble(m["text"], "me")
                 else:
                     c.insert("end", f"{peer.name}  {stamp}\n", "meta_them")
-                    c.insert("end", f" {m['text']} \n", "them")
+                    self._bubble(m["text"], "them")
         c.config(state="disabled")
         c.see("end")
 
