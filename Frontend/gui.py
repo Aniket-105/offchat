@@ -1,4 +1,3 @@
-
 import argparse
 import collections
 import getpass
@@ -168,6 +167,7 @@ class App(tk.Tk):
         self.by_tag = {}              
         self.tags = itertools.count(1)
         self.listbox_cache = None
+        self.current = None          # key (ip, port) of the selected peer
 
         style = ttk.Style(self)
         if "clam" in style.theme_names():
