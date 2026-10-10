@@ -11,17 +11,17 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-MAX_TEXT_BYTES = 2047          
-MAX_NAME_BYTES = 49          
-ONLINE_WINDOW_S = 10     
+MAX_TEXT_BYTES = 2047
+MAX_NAME_BYTES = 49
+ONLINE_WINDOW_S = 10
+COLOR_ONLINE = "#2e7d32"
+COLOR_OFFLINE = "#9ca3af"
 
 TICKS = {"QUEUED": "…", "SENT": "✓", "DELIVERED": "✓✓", "FAILED": "✗ failed"}
-
 
 def esc(s: str) -> str:
     return (s.replace("\\", "\\\\").replace("\n", "\\n")
              .replace("\t", "\\t").replace("\r", "\\r"))
-
 
 def unesc(s: str) -> str:
     out, i = [], 0
@@ -34,7 +34,6 @@ def unesc(s: str) -> str:
             out.append(s[i])
             i += 1
     return "".join(out)
-
 
 def find_backend(explicit):
     if explicit:
@@ -91,9 +90,9 @@ class Backend:
 class Peer:
     def __init__(self, name, ip, port):
         self.name, self.ip, self.port = name, ip, port
-        self.last_seen = 0.0         
+        self.last_seen = 0.0
         self.unread = 0
-        self.history = []         
+        self.history = []
 
     @property
     def key(self):
@@ -162,12 +161,12 @@ class App(tk.Tk):
         self.exe = find_backend(args.backend)
         self.events = queue.Queue()
         self.backend = None
-        self.peers = {}              
-        self.order = []             
-        self.by_tag = {}              
+        self.peers = {}
+        self.order = []
+        self.by_tag = {}
         self.tags = itertools.count(1)
         self.listbox_cache = None
-        self.current = None          # key (ip, port) of the selected peer
+        self.current = None
 
         style = ttk.Style(self)
         if "clam" in style.theme_names():
@@ -206,26 +205,29 @@ class App(tk.Tk):
         paned = ttk.PanedWindow(self, orient="horizontal")
         paned.pack(fill="both", expand=True)
 
-        # Left: peers
         left = ttk.Frame(paned, padding=(8, 8, 4, 8))
         paned.add(left, weight=1)
         ttk.Label(left, text="Peers", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
         lb_frame = ttk.Frame(left)
         lb_frame.pack(fill="both", expand=True, pady=6)
-        self.listbox = tk.Listbox(
-            lb_frame, activestyle="none", exportselection=False,
+        self.listbox = tk.Text(
+            lb_frame, wrap="none", state="disabled", cursor="arrow",
             borderwidth=1, relief="solid", highlightthickness=0,
-            selectbackground="#cfe3ff", selectforeground="#000",
+            padx=6, pady=4, spacing1=3, spacing3=3, width=22,
             font=("TkDefaultFont", 10))
+        self.listbox.tag_configure("dot_on", foreground=COLOR_ONLINE)
+        self.listbox.tag_configure("dot_off", foreground=COLOR_OFFLINE)
+        self.listbox.tag_configure("name_off", foreground=COLOR_OFFLINE)
+        self.listbox.tag_configure("badge", foreground="#c62828")
+        self.listbox.tag_configure("row_sel", background="#cfe3ff")
         sb = ttk.Scrollbar(lb_frame, command=self.listbox.yview)
         self.listbox.config(yscrollcommand=sb.set)
         self.listbox.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
-        self.listbox.bind("<<ListboxSelect>>", self._on_select)
+        self.listbox.bind("<Button-1>", self._on_click)
         self.add_btn = ttk.Button(left, text="Add peer…", command=self._add_peer)
         self.add_btn.pack(fill="x")
 
-        # Right: conversation
         right = ttk.Frame(paned, padding=(4, 8, 8, 8))
         paned.add(right, weight=3)
         self.header_var = tk.StringVar(value="Select a peer to start chatting")
@@ -270,7 +272,6 @@ class App(tk.Tk):
         c.tag_configure("failed", foreground="#c62828")
         c.tag_configure("delivered", foreground="#2e7d32")
         c.tag_configure("empty", foreground="#999", justify="center", spacing1=60)
-
 
     def _toggle(self):
         if self.backend:
@@ -336,7 +337,7 @@ class App(tk.Tk):
             while True:
                 kind, source, payload = self.events.get_nowait()
                 if source is not self.backend:
-                    continue            # leftovers from a process we stopped
+                    continue
                 if kind == "evt":
                     self._handle_event(payload)
                 elif kind == "exit":
@@ -377,12 +378,10 @@ class App(tk.Tk):
             peer = self.peers[key] = Peer(name, ip, port)
             self._refresh_peers(force=True)
         elif name and peer.name != name and peer.last_seen == 0.0:
-            peer.name = name        # replace a placeholder name
+            peer.name = name
         return peer
 
     def _same_peer(self, name, port):
-        """A host with several addresses may announce from one and connect
-        from another; treat a unique name+port match as the same peer."""
         hits = [p for p in self.peers.values()
                 if p.name == name and p.port == port]
         return hits[0] if len(hits) == 1 else None
@@ -394,7 +393,7 @@ class App(tk.Tk):
             return
         peer = self._upsert_peer(name, ip, port)
         if peer.name != name:
-            peer.name = name        # a peer can rename itself
+            peer.name = name
         peer.last_seen = time.time()
 
     def _on_message(self, mid, name, ip, port, text):
@@ -436,19 +435,30 @@ class App(tk.Tk):
             return
         self.listbox_cache = (keys, labels)
         self.order = keys
-        self.listbox.delete(0, "end")
-        for lab in labels:
-            self.listbox.insert("end", lab)
+        lb = self.listbox
+        lb.config(state="normal")
+        lb.delete("1.0", "end")
+        for k in keys:
+            p = self.peers[k]
+            lb.insert("end", "●" if p.online else "○", "dot_on" if p.online else "dot_off")
+            lb.insert("end", f" {p.name}", () if p.online else ("name_off",))
+            if p.unread:
+                lb.insert("end", f"  ({p.unread})", "badge")
+            lb.insert("end", "\n")
         if self.current in keys:
             idx = keys.index(self.current)
-            self.listbox.selection_set(idx)
-            self.listbox.see(idx)
+            lb.tag_add("row_sel", f"{idx + 1}.0", f"{idx + 1}.0 lineend +1c")
+            lb.see(f"{idx + 1}.0")
+        lb.config(state="disabled")
 
-    def _on_select(self, _event):
-        sel = self.listbox.curselection()
-        if not sel or sel[0] >= len(self.order):
-            return
-        self.current = self.order[sel[0]]
+    def _on_click(self, event):
+        idx = int(self.listbox.index(f"@{event.x},{event.y}").split(".")[0]) - 1
+        if 0 <= idx < len(self.order):
+            self._select_index(idx)
+        return "break"
+
+    def _select_index(self, idx):
+        self.current = self.order[idx]
         peer = self.peers[self.current]
         peer.unread = 0
         self.header_var.set(f"{peer.name}   ·   {peer.ip}:{peer.port}")
@@ -493,9 +503,8 @@ class App(tk.Tk):
         c.config(state="disabled")
         c.see("end")
 
-
     def _on_enter(self, event):
-        if event.state & 0x1:    
+        if event.state & 0x1:
             return None
         self._send()
         return "break"
@@ -521,13 +530,11 @@ class App(tk.Tk):
         self.hint_var.set("Enter to send · Shift+Enter for a new line")
         self._render()
 
-
 def _default_name():
     try:
         return getpass.getuser()[:MAX_NAME_BYTES]
     except Exception:
         return "me"
-
 
 def main():
     ap = argparse.ArgumentParser(description="OffChat GUI")
@@ -535,7 +542,6 @@ def main():
     ap.add_argument("--port", type=int, default=5000, help="TCP port to listen on")
     ap.add_argument("--backend", help="path to the compiled offchat binary")
     App(ap.parse_args()).mainloop()
-
 
 if __name__ == "__main__":
     main()
