@@ -16,14 +16,13 @@
 
 ## What is OffChat?
 
-OffChat is a small LAN chat project I'm building with C and Python. The idea is simple: find other OffChat users on the same network and send messages without needing the internet.
+OffChat is a LAN messaging application built with C and Python. It lets multiple devices on the same network discover each other and exchange messages without the internet.
 
-I started this for my college work, but I couldn't finish everything I had planned in the time I had. There's still plenty to improve, so I'm making the project open to contributions.
+The core communication is working, and I've tested it with multiple devices on a LAN. Now I want to take it further, improve the existing implementation, and explore what else we can build on top of it.
 
 I'm learning open source too. If you're new to it, you're welcome to pick an issue, try something, and learn along the way.
 
-**Current status:** It currently targets LAN use, and some features still need testing and improvement.
-
+Let's make OffChat better, together.
 ---
 
 ## Screenshot
@@ -142,11 +141,13 @@ The GUI uses these delivery marks:
 
  ⚠️ Message delivery status is still a work in progress and may not work reliably.
 
-## A few things to know
+## Improvement Needed
 
 - OffChat is still a work in progress.
 - It's currently work on LAN network only.
 - Messages are **not encrypted**.
+- Message status is incorrect.
+- File-Transfer feature not available.
 
 ---
 
